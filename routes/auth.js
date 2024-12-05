@@ -154,6 +154,13 @@ router.post("/token", (req, res) => {
                         .end();
                 } else {
                     const token = generateAccessToken(user);
+                    const userDetail = {
+                        userId: user.user_id,
+                        username: user.user_name,
+                        lastLogin: user.last_login_date,
+                        isBanned: user.is_banned,
+                        displayName: user.display_name,
+                    };
 
                     res.status(201)
                         .json({
@@ -162,7 +169,7 @@ router.post("/token", (req, res) => {
                             token: token,
                             refreshToken: refreshToken,
                             statusText: "Authenticated",
-                            responseData: user,
+                            responseData: userDetail,
                         })
                         .end();
                 }
