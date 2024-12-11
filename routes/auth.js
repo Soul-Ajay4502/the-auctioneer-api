@@ -5,7 +5,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const JWT_KEY = process.env.JWT_SECRET;
-const REFRESH_JWT_KEY = "refreshsecret";
+const REFRESH_JWT_KEY = process.env.REFRESH_JWT_KEY;
 let refreshTokens = [];
 const { validationResult } = require("express-validator");
 const validator = require("./validations/validation");

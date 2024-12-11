@@ -35,8 +35,10 @@ app.use((req, res, next) => {
 // Use routes
 app.use("/api/auth/", require("./routes/auth"));
 app.use("/api/league/", require("./routes/web/endpoints/league"))
-// app.use("/api/youth/", require("./routes/youth"));
-// app.use("/api/dashboard/", require("./routes/admin"));
+app.use("/api/team/", require("./routes/web/endpoints/team"))
+app.use("/api/template/", require("./routes/web/endpoints/playerUpload"));
+app.use("/api/players/", require("./routes/web/endpoints/players"));
+
 // app.use("/api/global/", require("./routes/global"));
 // app.use("/api/parish/", require("./routes/parish"));
 

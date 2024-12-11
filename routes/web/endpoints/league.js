@@ -4,13 +4,14 @@ const paginate = require("../../../commonFunctions/paginator");
 const authenticateToken = require("../../../middlewares/checkAuth");
 const toCamelCase = require("../../../commonFunctions/toCamelCase");
 const db = require("../../../config/db");
+const sendServerError=require("../../../commonFunctions/sendServerError")
 
 router.get("/", authenticateToken, async (req, res, next) => {
     const page = parseInt(req.query.page) || 1; // Default page is 1 if not provided
     const limit = parseInt(req.query.limit) || 10;
 
     // Query to fetch leagues created by the logged-in user
-    const leagueListQuery = `SELECT * FROM leagues WHERE created_by = ?`;
+    const leagueListQuery = `SELECT * FROM leagues WHERE created_by = ? ORDER BY created_date DESC`;
     const params = [req.user.user_id];
 
     try {
