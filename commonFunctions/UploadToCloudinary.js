@@ -1,7 +1,6 @@
 const axios = require('axios');
 const cloudinary = require('cloudinary').v2;
-const fs = require('fs');
-const path = require('path');
+const { PassThrough } = require('stream');
 require("dotenv").config();
 
 // Set up Cloudinary configuration
@@ -20,41 +19,14 @@ const downloadFileFromGoogleDrive = async (fileUrl) => {
     const response = await axios({
       method: 'GET',
       url: downloadUrl,
-      responseType: 'stream',
-      timeout: 800000, 
+      responseType: 'arraybuffer', // Use arraybuffer to get data as a buffer
+      timeout: 800000,
     });
 
-    // Create a temp file to save the downloaded content
     const contentType = response.headers['content-type'];
+    let fileExtension = contentType.includes('image/png') ? '.png' : '.jpg';
 
-    // Determine the file extension based on the MIME type
-    let fileExtension = '';
-    if (contentType) {
-        if (contentType.includes('image/jpeg')) {
-            fileExtension = '.jpg';
-        } else if (contentType.includes('image/png')) {
-            fileExtension = '.png';
-        } else if (contentType.includes('image/webp')) {
-            fileExtension = '.webp';
-
-        }else if (contentType.includes('text/html')) {
-            fileExtension = '.html';
-
-        } else {
-            fileExtension = '.jpg'; // Default case for unknown types
-        }
-    }
-    const tempFilePath = path.join(__dirname, `tempfile${fileExtension}`);
-    console.log('tempFilePathtempFilePath',tempFilePath);
-    
-    const writer = fs.createWriteStream(tempFilePath);
-
-    response.data.pipe(writer);
-
-    return new Promise((resolve, reject) => {
-      writer.on('finish', () => resolve(tempFilePath));
-      writer.on('error', (err) => reject(err));
-    });
+    return { buffer: response.data, fileExtension };
   } catch (err) {
     console.error('Error downloading file:', err);
     throw err;
@@ -63,24 +35,32 @@ const downloadFileFromGoogleDrive = async (fileUrl) => {
 
 // Function to extract file ID from Google Drive URL
 const extractFileId = (url) => {
-  const regex = /(?:drive\.google\.com\/open\?id=)([\w-]+)/;
-  const match = url.match(regex);
-  if (match && match[1]) {
-    return match[1];
-  }
-  throw new Error('Invalid Google Drive URL');
+  const params = new URLSearchParams(new URL(url).search);
+  const fileId = params.get('id');
+  if (!fileId) throw new Error('Invalid Google Drive URL');
+  return fileId;
 };
 
 // Function to upload file to Cloudinary
-const uploadFileToCloudinary = async (filePath) => {
+const uploadFileToCloudinary = async ({ buffer, fileExtension }) => {
   try {
-    const result = await cloudinary.uploader.upload(filePath, {
-      resource_type: 'image', // Automatically detect file type
-      public_id: `uploaded_file_${Date.now()}`, // Set a unique public ID
-    });
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'auto',
+          public_id: `uploaded_file_${Date.now()}`,
+          transformation: [{ width: 800, height: 800, crop: 'limit' }], // Optional transformation
+        },
+        (err, result) => {
+          if (err) return reject(err);
+          resolve(result.secure_url);
+        }
+      );
 
-    // Return the public URL of the uploaded file
-    return result.secure_url;
+      const stream = new PassThrough();
+      stream.end(buffer);
+      stream.pipe(uploadStream);
+    });
   } catch (err) {
     console.error('Error uploading file to Cloudinary:', err);
     throw err;
@@ -90,19 +70,13 @@ const uploadFileToCloudinary = async (filePath) => {
 // Main function to handle downloading and uploading
 const handleFileUpload = async (googleDriveUrls) => {
   try {
-    const uploadedUrls = [];
+    const uploadPromises = googleDriveUrls.map(async (url) => {
+      const fileData = await downloadFileFromGoogleDrive(url);
+      const cloudinaryUrl = await uploadFileToCloudinary(fileData);
+      return cloudinaryUrl;
+    });
 
-    for (const url of googleDriveUrls) {
-      const tempFilePath = await downloadFileFromGoogleDrive(url);
-      const cloudinaryUrl = await uploadFileToCloudinary(tempFilePath);
-
-      // Store the Cloudinary URL in the array
-      uploadedUrls.push(cloudinaryUrl);
-
-      // Clean up the temp file
-      fs.unlinkSync(tempFilePath);
-    }
-
+    const uploadedUrls = await Promise.all(uploadPromises);
     return uploadedUrls;
   } catch (err) {
     console.error('Error processing files:', err);
@@ -110,35 +84,26 @@ const handleFileUpload = async (googleDriveUrls) => {
   }
 };
 
-
 // Map parsed data to file upload process
 const uploadPlayerFiles = async (playersData) => {
-  const googleDriveUrls = playersData.map(player => [
-    player.PHOTO,
-    // player.PAYMENT_PROOF,
-    // player.ID_PROOF,
-  ]).flat();
+  const googleDriveUrls = playersData.map(player => player.PHOTO).flat();
 
   try {
     const uploadedUrls = await handleFileUpload(googleDriveUrls);
     console.log('Uploaded file URLs:', uploadedUrls);
 
-    // Now you can use the uploaded URLs (e.g., to store them in your database)
+    // Map Cloudinary URLs back to players data
     playersData.forEach((player, index) => {
-        player.PHOTO = uploadedUrls[index];
-    //   player.PHOTO = uploadedUrls[index * 3];
-    //   player.PAYMENT_PROOF = uploadedUrls[index * 3 + 1];
-    //   player.ID_PROOF = uploadedUrls[index * 3 + 2];
+      player.PHOTO = uploadedUrls[index];
     });
 
     console.log('Updated player data with Cloudinary URLs:', playersData);
-    return playersData
+    return playersData;
   } catch (err) {
     console.error('Error uploading player files:', err);
-    return []
+    return [];
   }
 };
 
-// Call the function with your parsed data
+// Export the function for use in other modules
 module.exports = uploadPlayerFiles;
-

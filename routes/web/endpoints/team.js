@@ -5,6 +5,26 @@ const authenticateToken = require("../../../middlewares/checkAuth");
 const toCamelCase = require("../../../commonFunctions/toCamelCase");
 const db = require("../../../config/db");
 const sendServerError=require("../../../commonFunctions/sendServerError")
+const { v2: cloudinary } = require("cloudinary");
+const multer = require("multer");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+require("dotenv").config();
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SEC,
+  });
+// Configure Multer Storage for Cloudinary
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: "team_logos", // Folder in Cloudinary
+        allowed_formats: ["jpeg", "png", "jpg", "gif"],
+    },
+});
+
+const upload = multer({ storage });
 
 router.get("/:leagueId", authenticateToken, async (req, res, next) => {
     const page = parseInt(req.query.page) || 1; // Default page is 1 if not provided
@@ -38,7 +58,7 @@ router.get("/:leagueId", authenticateToken, async (req, res, next) => {
     }
 });
 
-router.post("/add", authenticateToken, async (req, res) => {
+router.post("/add", authenticateToken,upload.single("teamLogo"), async (req, res) => {
     const {
         teamName,
         teamOwner,
@@ -46,7 +66,7 @@ router.post("/add", authenticateToken, async (req, res) => {
         leagueId,
         jerseyColor,
         teamLogo,
-    } = req.body;
+    } = req.query;
 
     // Validate input fields
     if (
@@ -60,11 +80,11 @@ router.post("/add", authenticateToken, async (req, res) => {
             responseData: [],
         });
     }
-
+    const teamLogoUrl = req.file?.path || null;
     const query = `
         INSERT INTO teams (
-            team_name, team_owner, team_owner_phone, league_id, jersey_color, team_logo
-        ) VALUES (?, ?, ?, ?, ?, ?)
+            team_name, team_owner, team_owner_phone, league_id, jersey_color, team_logo,logo_url
+        ) VALUES (?, ?, ?, ?, ?, ? , ?)
     `;
 
     const values = [
@@ -73,7 +93,8 @@ router.post("/add", authenticateToken, async (req, res) => {
         teamOwnerPhone || null, // Optional field
         leagueId,
         jerseyColor || null, // Optional field
-        teamLogo || null, // Optional field
+        req.file?.originalname||null,// Optional field
+        teamLogoUrl
     ];
 
     try {
@@ -90,67 +111,71 @@ router.post("/add", authenticateToken, async (req, res) => {
 });
 
 
-router.post("/update", authenticateToken, async (req, res) => {
-    const {
-        teamName,
-        teamOwner,
-        teamOwnerPhone,
-        jerseyColor,
-        teamLogo,
-        teamId
-    } = req.body;
+router.post(
+    "/update",
+    authenticateToken,
+    async (req, res) => {
+        const { teamName, teamOwner, teamOwnerPhone, jerseyColor, teamId } = req.query;
 
-    // Validate input fields (team name is mandatory)
-    if (!teamName) {
-        return res.status(400).json({
-            statusCode: 400,
-            isError: true,
-            statusText: "Team name is required",
-            responseData: [],
-        });
-    }
-
-    const query = `
-        UPDATE teams 
-        SET team_name = ?, 
-            team_owner = ?, 
-            team_owner_phone = ?, 
-            jersey_color = ?, 
-            team_logo = ?
-        WHERE team_id = ?
-    `;
-
-    const values = [
-        teamName,
-        teamOwner || null, 
-        teamOwnerPhone || null,
-        jerseyColor || null,
-        teamLogo || null,
-        teamId
-    ];
-
-    try {
-        const [rows, fields] = await db.query(query, values);
-
-        // Check if any rows were affected
-        if (rows.affectedRows === 0) {
-            return res.status(404).json({
-                statusCode: 404,
+        // Validate input fields (team name is mandatory)
+        if (!teamName) {
+            return res.status(400).json({
+                statusCode: 400,
                 isError: true,
-                statusText: "Team not found",
+                statusText: "Team name is required",
                 responseData: [],
             });
         }
 
-        return res.status(200).json({
-            statusCode: 200,
-            isError: false,
-            statusText: "Team updated successfully",
-            responseData: rows,
-        });
-    } catch (error) {
-        return sendServerError(res, error);
+
+        const query = `
+            UPDATE teams 
+            SET team_name = ?, 
+                team_owner = ?, 
+                team_owner_phone = ?, 
+                jersey_color = ? 
+            WHERE team_id = ?
+        `;
+
+        const values = [
+            teamName,
+            teamOwner || null,
+            teamOwnerPhone || null,
+            jerseyColor || null,
+            teamId,
+        ];
+
+        try {
+            const [rows, fields] = await db.query(query, values);
+
+            // Check if any rows were affected
+            if (rows.affectedRows === 0) {
+                return res.status(404).json({
+                    statusCode: 404,
+                    isError: true,
+                    statusText: "Team not found",
+                    responseData: [],
+                });
+            }
+
+            return res.status(200).json({
+                statusCode: 200,
+                isError: false,
+                statusText: "Team updated successfully",
+                responseData: {
+                    updatedTeam: {
+                        teamName,
+                        teamOwner,
+                        teamOwnerPhone,
+                        jerseyColor,
+                        teamId,
+                    },
+                },
+            });
+        } catch (error) {
+            return sendServerError(res, error);
+        }
     }
-});
+);
 
 module.exports = router;
