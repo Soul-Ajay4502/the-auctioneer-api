@@ -88,7 +88,7 @@ router.post(
         await cloudinary.api.delete_resources([prevDpFile], { type: 'upload', resource_type: 'image' });
 
         // Update player photo in the database
-                    const query = `
+        const query = `
                 UPDATE player_details 
                     SET player_photo = ?,
                     is_updated_dp = 1
@@ -128,4 +128,116 @@ router.post(
 
     }
 );
+
+router.get("/playerIds/:leagueId", authenticateToken, async (req, res, next) => {
+    const leagueId = req.params.leagueId;
+    let isUnsoldList = false;
+    // Query to fetch leagues created by the logged-in user
+    const leaguePlayeListQuery = `SELECT * FROM player_details WHERE league_id = ? AND sold_to IS NULL AND is_unsold = ? LIMIT 15`;
+    const params = [leagueId, 'no'];
+
+    try {
+        const [rows] = await db.query(leaguePlayeListQuery, params)
+        let formattedResponseData;
+        if (rows.length == 0) {
+            const leaguePlayeUnsoldListQuery = `SELECT * FROM player_details WHERE league_id = ? AND sold_to IS NULL AND is_unsold = yes LIMIT 15`;
+            const [unsoldRows] = await db.query(leaguePlayeUnsoldListQuery, params)
+            formattedResponseData = toCamelCase(unsoldRows);
+            isUnsoldList = unsoldRows.length > 0;
+
+        }
+        else {
+            formattedResponseData = toCamelCase(rows);
+        }
+        // Sending a structured response
+        res.status(200).json({
+            statusCode: 200,
+            isError: false,
+            isUnsoldList: isUnsoldList,
+            responseData: formattedResponseData,
+            statusText: "Items retrieved successfully",
+        });
+    } catch (error) {
+        return sendServerError(res, error); // Forwarding error to a helper function
+    }
+});
+
+router.post("/sell", authenticateToken, async (req, res, next) => {
+    const { playerId, soldTo, soldAmount, playerBasePrice } = req.body;
+
+    try {
+        conn = await db.connection();
+    } catch (error) {
+        return sendServerError(res, error);
+    }
+    const teamDetailsQuery = 'SELECT * FROM teams WHERE team_id = ?'
+    const teamParams = [soldTo]
+    const playerCountQuery = 'SELECT COUNT(*) AS player_count_in_team FROM player_details WHERE sold_to = ?'
+    const playerCountParams = [soldTo]
+    const [playerCount] = await conn.query(playerCountQuery, playerCountParams);
+    const [teamDetails] = await conn.query(teamDetailsQuery, teamParams);
+    let team;
+
+    if (teamDetails.length == 0) {
+        return res.status(400).json({
+            statusCode: 400,
+            isError: false,
+            responseData: '',
+            statusText: "team not found",
+        });
+    }
+    team = teamDetails[0];
+    const teamPlayerCount = playerCount[0]
+    await conn.beginTransaction();
+    const balanceAmount = Number(team.balance_amount) - Number(soldAmount)
+    const maxAmountPerPlayerBalance = balanceAmount - ((11 - (Number(teamPlayerCount.player_count_in_team) + 1)) * Number(playerBasePrice))
+
+    const sellQuery = 'UPDATE player_details SET sold_to = ? , sold_amount = ? WHERE player_id = ?'
+    const sellParams = [soldTo, soldAmount, playerId]
+    const updateTeamQuery = 'UPDATE teams SET balance_amount = ? , max_amount_per_player = ? WHERE team_id = ?'
+    const updateTeamParams = [balanceAmount, maxAmountPerPlayerBalance, soldTo]
+    // Update player details
+    await conn.query(sellQuery, sellParams);
+
+    // Update team details
+    await conn.query(updateTeamQuery, updateTeamParams);
+
+    await conn.commit(); // Commit the transaction
+
+    try {
+
+        res.status(200).json({
+            statusCode: 200,
+            isError: false,
+            isUnsoldList: '',
+            responseData: '',
+            statusText: "Items retrieved successfully",
+        });
+    } catch (error) {
+        await conn.rollback();
+        return sendServerError(res, error); // Forwarding error to a helper function
+    } finally {
+        conn?.release(); // Release the connection back to the pool
+    }
+
+});
+
+
+router.post("/unsold", authenticateToken, async (req, res, next) => {
+    const { playerId } = req.body;
+    const unsoldQuery = 'UPDATE player_details SET is_unsold = ? WHERE player_id = ?'
+    const [response] = await db.query(unsoldQuery, ['yes', playerId])
+    try {
+
+        res.status(200).json({
+            statusCode: 200,
+            isError: false,
+            responseData: response,
+            statusText: "Player Unsold",
+        });
+    } catch (error) {
+        return sendServerError(res, error); // Forwarding error to a helper function
+    }
+});
+
 module.exports = router;

@@ -38,6 +38,8 @@ app.use("/api/league/", require("./routes/web/endpoints/league"))
 app.use("/api/team/", require("./routes/web/endpoints/team"))
 app.use("/api/template/", require("./routes/web/endpoints/playerUpload"));
 app.use("/api/players/", require("./routes/web/endpoints/players"));
+app.use("/api/dashboard/", require("./routes/web/endpoints/dashboard"));
+
 
 // app.use("/api/global/", require("./routes/global"));
 // app.use("/api/parish/", require("./routes/parish"));
