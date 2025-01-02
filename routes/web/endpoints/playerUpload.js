@@ -67,7 +67,7 @@ router.post(
     timeout("5m"),
     upload.single("csv_file"),
     async (req, res, next) => {
-        const leagueId = req.query.league_id;
+        const { leagueId, leagueName } = req.query;
 
         //Check if the user clicks upload without selecting a file
         try {
@@ -241,7 +241,7 @@ router.post(
                     const { isPublic: isPhotoPublic } = permissionResponse;
                     const { isPublic: isPaymentPublic } = paymentResponse;
                     const { isPublic: isIdPublic } = idResponse;
-                    
+
                     if (!isPhotoPublic || !isPaymentPublic || !isIdPublic) {
                         await fs_promise.unlink(req.file?.path);
                         return res
@@ -254,11 +254,57 @@ router.post(
                             })
                             .end();
                     }
+                    const selectExisitingPlayersQuery = `SELECT  
+                        registration_time, 
+                        player_name, 
+                        place, 
+                        whatsapp_no, 
+                        current_team
+                    FROM player_details WHERE league_id = ?`
+                    const [exisitingPlayerResponse] = await db.query(selectExisitingPlayersQuery, [leagueId])
+                    // if (exisitingPlayerResponse.length > 0) {
+                    const filteredData = exisitingPlayerResponse.length > 0 ? parsedData.filter(parsedPlayer =>
+                        !exisitingPlayerResponse.some(existingPlayer =>
+                            parsedPlayer.PLAYER_NAME == existingPlayer.player_name &&
+                            parsedPlayer.PLACE == existingPlayer.place &&
+                            parsedPlayer.WHATSAPP_NO == existingPlayer.whatsapp_no &&
+                            parsedPlayer.CURRENT_TEAM == existingPlayer.current_team
+                        )
+                    ) : parsedData
 
-                    const updatedData = await uploadPlayerFiles(parsedData)
+                    if (filteredData.length == 0) {
+                        await fs_promise.unlink(req.file?.path);
+                        return res
+                            .status(400)
+                            .json({
+                                statusCode: 400,
+                                isError: true,
+                                responseData: [],
+                                statusText: 'All the player data you uploaded are presented in the player list',
+                            })
+                            .end();
+                    }
+
+
+                    // }
+                    
+                    const updatedData = await uploadPlayerFiles(filteredData, leagueName,leagueId)
+                    if(updatedData.length === 0)
+                    {
+                        await fs_promise.unlink(req.file?.path);
+                        return res
+                            .status(400)
+                            .json({
+                                statusCode: 400,
+                                isError: true,
+                                responseData: [],
+                                statusText: 'Error on upload images',
+                            })
+                            .end();
+                    }
 
                     const query = `
-                INSERT IGNORE INTO player_details (
+                INSERT INTO player_details (
                   registration_time, 
                   player_name, 
                   place, 
@@ -289,10 +335,9 @@ router.post(
                         player.ID_PROOF,
                         leagueId
                     ]);
-                    let response=[];
-                    if (updatedData.length > 0) {
-                         [response] = await db.query(query, [values])
-                    }
+
+                    const [response] = await db.query(query, [values])
+
                     await fs_promise.unlink(req.file?.path);
                     return res
                         .status(200)

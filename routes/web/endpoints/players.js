@@ -15,14 +15,29 @@ cloudinary.config({
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SEC,
 });
-// Configure Multer Storage for Cloudinary
+// // Configure Multer Storage for Cloudinary
+// const storage = new CloudinaryStorage({
+//     cloudinary: cloudinary,
+//     params: {
+//         folder: "updated_user_dp",
+//         allowed_formats: ["jpeg", "png", "jpg", "gif"],
+//     },
+// });
+
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
-    params: {
-        folder: "updated_user_dp",
-        allowed_formats: ["jpeg", "png", "jpg", "gif"],
+    params: async (req, file) => {
+      // Assuming the folder name is sent in the request body or query
+      const folderName =  req.query.folderName || "default_folder";
+      const fileName=req.query.fileName||`file_${Date.now()}`
+      return {
+        folder: `${folderName}/player_dp`, // Dynamic folder name
+        allowed_formats: ["jpeg", "png", "jpg", "gif"], // Allowed formats
+        public_id: fileName.replace(/\s+/g, ''), // Optional: Add a custom public ID
+        overwrite: true,
+      };
     },
-});
+  });
 const upload = multer({ storage });
 
 router.get("/:leagueId", authenticateToken, async (req, res, next) => {
@@ -134,14 +149,14 @@ router.get("/playerIds/:leagueId", authenticateToken, async (req, res, next) => 
     let isUnsoldList = false;
     // Query to fetch leagues created by the logged-in user
     const leaguePlayeListQuery = `SELECT * FROM player_details WHERE league_id = ? AND sold_to IS NULL AND is_unsold = ? LIMIT 15`;
-    const params = [leagueId, 'no'];
+    const params = [leagueId];
 
     try {
-        const [rows] = await db.query(leaguePlayeListQuery, params)
+        const [rows] = await db.query(leaguePlayeListQuery, [...params, 'no'])
         let formattedResponseData;
         if (rows.length == 0) {
-            const leaguePlayeUnsoldListQuery = `SELECT * FROM player_details WHERE league_id = ? AND sold_to IS NULL AND is_unsold = yes LIMIT 15`;
-            const [unsoldRows] = await db.query(leaguePlayeUnsoldListQuery, params)
+            const leaguePlayeUnsoldListQuery = `SELECT * FROM player_details WHERE league_id = ? AND sold_to IS NULL AND is_unsold = ? LIMIT 15`;
+            const [unsoldRows] = await db.query(leaguePlayeUnsoldListQuery, [...params, 'yes'])
             formattedResponseData = toCamelCase(unsoldRows);
             isUnsoldList = unsoldRows.length > 0;
 
@@ -191,12 +206,19 @@ router.post("/sell", authenticateToken, async (req, res, next) => {
     await conn.beginTransaction();
     const balanceAmount = Number(team.balance_amount) - Number(soldAmount)
     const maxAmountPerPlayerBalance = balanceAmount - ((11 - (Number(teamPlayerCount.player_count_in_team) + 1)) * Number(playerBasePrice))
+console.log('maxAmountPerPlayerBalance',maxAmountPerPlayerBalance);
+console.log('balanceAmount',balanceAmount);
 
     const sellQuery = 'UPDATE player_details SET sold_to = ? , sold_amount = ? WHERE player_id = ?'
     const sellParams = [soldTo, soldAmount, playerId]
     const updateTeamQuery = 'UPDATE teams SET balance_amount = ? , max_amount_per_player = ? WHERE team_id = ?'
     const updateTeamParams = [balanceAmount, maxAmountPerPlayerBalance, soldTo]
-    // Update player details
+    if(team.is_auction_started == 'no')
+    {
+        const updateTeamForAuctionStartQuery = 'UPDATE teams SET is_auction_started = ? WHERE league_id = ?';
+        await conn.query(updateTeamForAuctionStartQuery, ['yes',team.league_id]);
+
+    }
     await conn.query(sellQuery, sellParams);
 
     // Update team details

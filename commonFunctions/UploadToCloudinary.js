@@ -42,14 +42,17 @@ const extractFileId = (url) => {
 };
 
 // Function to upload file to Cloudinary
-const uploadFileToCloudinary = async ({ buffer, fileExtension }) => {
+const uploadFileToCloudinary = async ({ buffer, leagueName,leagueId,fileName }) => {
   try {
+    
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           resource_type: 'auto',
-          public_id: `uploaded_file_${Date.now()}`,
+          public_id: fileName,//`uploaded_file_${Date.now()}`,
+          folder:`${leagueId}-${leagueName}/player_dp`,
           transformation: [{ width: 800, height: 800, crop: 'limit' }], // Optional transformation
+          overwrite: true,
         },
         (err, result) => {
           if (err) return reject(err);
@@ -68,11 +71,12 @@ const uploadFileToCloudinary = async ({ buffer, fileExtension }) => {
 };
 
 // Main function to handle downloading and uploading
-const handleFileUpload = async (googleDriveUrls) => {
+const handleFileUpload = async (googleDriveUrls,leagueName,leagueId) => {
+
   try {
     const uploadPromises = googleDriveUrls.map(async (url) => {
-      const fileData = await downloadFileFromGoogleDrive(url);
-      const cloudinaryUrl = await uploadFileToCloudinary(fileData);
+      const fileData = await downloadFileFromGoogleDrive(url.dpurl);
+      const cloudinaryUrl = await uploadFileToCloudinary({...fileData,leagueName:leagueName,leagueId:leagueId,fileName:url.playerName});
       return cloudinaryUrl;
     });
 
@@ -85,12 +89,15 @@ const handleFileUpload = async (googleDriveUrls) => {
 };
 
 // Map parsed data to file upload process
-const uploadPlayerFiles = async (playersData) => {
-  const googleDriveUrls = playersData.map(player => player.PHOTO).flat();
+const uploadPlayerFiles = async (playersData,leagueName,leagueId) => {
+  const googleDriveUrls = playersData.map(player => ({
+    dpurl: player.PHOTO,
+    playerName: `${player.PLAYER_NAME.replace(/\s+/g, '')}-${player.WHATSAPP_NO}`
+}));
 
   try {
-    const uploadedUrls = await handleFileUpload(googleDriveUrls);
-    console.log('Uploaded file URLs:', uploadedUrls);
+    const uploadedUrls = await handleFileUpload(googleDriveUrls,leagueName,leagueId);
+    // console.log('Uploaded file URLs:', uploadedUrls);
 
     // Map Cloudinary URLs back to players data
     playersData.forEach((player, index) => {

@@ -4,14 +4,30 @@ const paginate = require("../../../commonFunctions/paginator");
 const authenticateToken = require("../../../middlewares/checkAuth");
 const toCamelCase = require("../../../commonFunctions/toCamelCase");
 const db = require("../../../config/db");
-const sendServerError=require("../../../commonFunctions/sendServerError")
+const sendServerError = require("../../../commonFunctions/sendServerError")
 
 router.get("/", authenticateToken, async (req, res, next) => {
     const page = parseInt(req.query.page) || 1; // Default page is 1 if not provided
     const limit = parseInt(req.query.limit) || 10;
 
     // Query to fetch leagues created by the logged-in user
-    const leagueListQuery = `SELECT * FROM leagues WHERE created_by = ? ORDER BY created_date DESC`;
+    const leagueListQuery = `SELECT 
+                                    l.*,
+                                    COUNT(DISTINCT pd.player_id) AS player_count,
+                                    COUNT(DISTINCT t.team_id) AS team_count
+                                FROM 
+                                    leagues l
+                                LEFT JOIN 
+                                    player_details pd ON pd.league_id = l.league_id
+                                LEFT JOIN 
+                                    teams t ON t.league_id = l.league_id
+                                WHERE 
+                                    l.created_by = ?
+                                GROUP BY 
+                                    l.league_id
+                                ORDER BY 
+                                    l.created_date DESC
+                                `;
     const params = [req.user.user_id];
 
     try {
@@ -50,6 +66,9 @@ router.post("/add", authenticateToken, async (req, res) => {
         leagueEndDate,
         registrationFee,
         registrationEndDate,
+        playerBasePrice,
+        auctionStartDate,
+        bidAmountPerTeam
     } = req.body;
 
     if (
@@ -62,7 +81,10 @@ router.post("/add", authenticateToken, async (req, res) => {
         !leagueStartDate ||
         !leagueEndDate ||
         !registrationFee ||
-        !registrationEndDate
+        !registrationEndDate ||
+        !playerBasePrice||
+        !bidAmountPerTeam||
+        !auctionStartDate
     ) {
         return res.status(400).json({
             statusCode: 400,
@@ -76,8 +98,8 @@ router.post("/add", authenticateToken, async (req, res) => {
         INSERT IGNORE INTO leagues (
             league_name, league_full_name, league_locations, total_players, total_teams,
             has_unsold, league_start_date, league_end_date, registration_fee, created_by,
-            registration_end_date
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            registration_end_date,player_base_price,bid_amount_per_team,auction_start_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ? , ? , ?)
     `;
 
     const values = [
@@ -92,6 +114,9 @@ router.post("/add", authenticateToken, async (req, res) => {
         registrationFee,
         req.user.user_id,
         registrationEndDate,
+        playerBasePrice,
+        bidAmountPerTeam,
+        auctionStartDate
     ];
 
     try {
@@ -123,6 +148,9 @@ router.post("/update", authenticateToken, async (req, res) => {
         leagueEndDate,
         registrationFee,
         registrationEndDate,
+        playerBasePrice,
+        bidAmountPerTeam,
+        auctionStartDate
     } = req.body;
 
     // Check for missing fields
@@ -136,7 +164,10 @@ router.post("/update", authenticateToken, async (req, res) => {
         !leagueStartDate ||
         !leagueEndDate ||
         !registrationFee ||
-        !registrationEndDate
+        !registrationEndDate ||
+        !playerBasePrice||
+        !bidAmountPerTeam||
+        !auctionStartDate
     ) {
         return res.status(400).json({
             statusCode: 400,
@@ -157,7 +188,10 @@ router.post("/update", authenticateToken, async (req, res) => {
             league_start_date = ?, 
             league_end_date = ?, 
             registration_fee = ?, 
-            registration_end_date = ?
+            registration_end_date = ?,
+            player_base_price=?,
+            bid_amount_per_team = ?,
+            auction_start_date = ?
         WHERE league_id = ?
     `;
 
@@ -172,7 +206,11 @@ router.post("/update", authenticateToken, async (req, res) => {
         leagueEndDate,
         registrationFee,
         registrationEndDate,
+        playerBasePrice,
+        bidAmountPerTeam,
+        auctionStartDate,
         leagueId,
+
     ];
 
     try {
