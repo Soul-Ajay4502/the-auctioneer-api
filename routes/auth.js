@@ -205,7 +205,7 @@ router.post("/logout", (req, res) => {
     }
 });
 
-router.post("/get-otp", async (req, res) => {
+router.post("/get-otp-for-signUp", async (req, res) => {
     const { email, password, displayName } = req.body;
     const query = `SELECT * FROM user_login WHERE user_name = ? `;
     const userRecords = [email];
@@ -213,10 +213,10 @@ router.post("/get-otp", async (req, res) => {
         [userRows, userFields] = await db.query(query, userRecords);
 
         const { otp, expiresAt } = generateOTP();
-        
+
         const hashedPassword = await encryptPassword(password);
         if (userRows.length == 0) {
-            
+
             const createUserQuery = `INSERT INTO user_login 
              (user_name, user_password, created_date, display_name, otp,otp_expires_at)
              VALUES(?,?,?,?,?,?)`
@@ -241,7 +241,7 @@ router.post("/get-otp", async (req, res) => {
 
         const createUserQuery = `UPDATE user_login 
         SET user_password = ? ,display_name = ?,otp = ? ,otp_expires_at = ? WHERE user_name = ?`
-        const records = [hashedPassword,displayName,otp, expiresAt, email]
+        const records = [hashedPassword, displayName, otp, expiresAt, email]
         const [response] = await db.query(createUserQuery, records);
 
         res.status(200).json({
@@ -263,6 +263,109 @@ router.post("/get-otp", async (req, res) => {
     }
 });
 
+router.post("/get-otp-for-resetPassword", async (req, res) => {
+    const { email, password, displayName } = req.body;
+    const query = `SELECT * FROM user_login WHERE user_name = ? `;
+    const userRecords = [email];
+    try {
+        [userRows, userFields] = await db.query(query, userRecords);
+
+        const { otp, expiresAt } = generateOTP();
+
+        if (userRows.length == 0) {
+            return res.status(400).json({
+                statusCode: 400,
+                isError: true,
+                statusText: "This email is not registered on the system",
+            });
+        }
+        const USER_DATA = userRows[0];
+        if (USER_DATA.is_registration_complete == 'no') {
+            return res.status(400).json({
+                statusCode: 400,
+                isError: false,
+                otp: otp,
+                statusText: "Your Onboarding has not completed please register first",
+            });
+        }
+
+        const createUserQuery = `UPDATE user_login 
+        SET otp = ? ,otp_expires_at = ? WHERE user_name = ?`
+        const records = [otp, expiresAt, email]
+        await db.query(createUserQuery, records);
+
+        res.status(200).json({
+            statusCode: 200,
+            isError: false,
+            otp: otp,
+            statusText: "OTP has been sent to your email",
+        });
+    } catch (error) {
+        console.log(error);
+        res.status(500)
+            .json({
+                statusCode: 500,
+                isError: true,
+                responseData: null,
+                statusText: "Server Error,Try Again",
+            })
+            .end();
+    }
+});
+
+router.post("/resetPassword", async (req, res) => {
+    const { email, otp, newPassword:password } = req.body;
+    const query = `SELECT * FROM user_login WHERE user_name = ? `;
+    const userRecords = [email];
+    try {
+        [userRows, userFields] = await db.query(query, userRecords);
+        const hashedPassword = await encryptPassword(password);
+        if (userRows.length == 0) {
+            return res.status(400).json({
+                statusCode: 400,
+                isError: false,
+                statusText: "USER not found",
+            });
+        }
+        const USER_DATA = userRows[0];
+        if (USER_DATA.is_registration_complete == 'no') {
+            return res.status(400).json({
+                statusCode: 400,
+                isError: false,
+                statusText: "Your Onboarding has not completed",
+            });
+        }
+        const verificationResult = verifyOTP(otp, USER_DATA.otp, USER_DATA.expiresAt);
+        if (!verificationResult.isValid) {
+            return res.status(400).json({
+                statusCode: 400,
+                isError: false,
+                statusText: "Invalid Otp",
+            });
+        }
+
+        const updateUserQuery = `UPDATE user_login 
+        SET user_password = ? WHERE user_name = ?`
+        const records = [hashedPassword, email]
+        const [response] = await db.query(updateUserQuery, records);
+
+        res.status(200).json({
+            statusCode: 200,
+            isError: false,
+            statusText: "Password was updated",
+        });
+    } catch (error) {
+        console.log(error);
+        res.status(500)
+            .json({
+                statusCode: 500,
+                isError: true,
+                responseData: null,
+                statusText: "Server Error,Try Again",
+            })
+            .end();
+    }
+});
 router.post("/register", async (req, res) => {
     const { email, otp } = req.body;
     const query = `SELECT * FROM user_login WHERE user_name = ? `;

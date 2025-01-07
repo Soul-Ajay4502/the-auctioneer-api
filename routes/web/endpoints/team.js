@@ -158,10 +158,10 @@ router.post(
             teamOwner || null,
             teamOwnerPhone || null,
             jerseyColor || null,
+            maxAmountForBid,
+            maxAmountForBid,
+            MAX_AMOUNT_PER_PLAYER,
             teamId,
-            maxAmountForBid,
-            maxAmountForBid,
-            MAX_AMOUNT_PER_PLAYER
         ];
 
         try {

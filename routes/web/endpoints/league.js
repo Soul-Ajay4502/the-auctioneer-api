@@ -68,7 +68,9 @@ router.post("/add", authenticateToken, async (req, res) => {
         registrationEndDate,
         playerBasePrice,
         auctionStartDate,
-        bidAmountPerTeam
+        bidAmountPerTeam,
+        increments,
+        breakPoints
     } = req.body;
 
     if (
@@ -82,9 +84,11 @@ router.post("/add", authenticateToken, async (req, res) => {
         !leagueEndDate ||
         !registrationFee ||
         !registrationEndDate ||
-        !playerBasePrice||
-        !bidAmountPerTeam||
-        !auctionStartDate
+        !playerBasePrice ||
+        !bidAmountPerTeam ||
+        !auctionStartDate ||
+        !breakPoints ||
+        !increments
     ) {
         return res.status(400).json({
             statusCode: 400,
@@ -98,8 +102,8 @@ router.post("/add", authenticateToken, async (req, res) => {
         INSERT IGNORE INTO leagues (
             league_name, league_full_name, league_locations, total_players, total_teams,
             has_unsold, league_start_date, league_end_date, registration_fee, created_by,
-            registration_end_date,player_base_price,bid_amount_per_team,auction_start_date
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ? , ? , ?)
+            registration_end_date,player_base_price,bid_amount_per_team,auction_start_date,break_points,increments
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ? , ? , ? ,? ,?)
     `;
 
     const values = [
@@ -116,7 +120,9 @@ router.post("/add", authenticateToken, async (req, res) => {
         registrationEndDate,
         playerBasePrice,
         bidAmountPerTeam,
-        auctionStartDate
+        auctionStartDate,
+        breakPoints,
+        increments
     ];
 
     try {
@@ -150,7 +156,9 @@ router.post("/update", authenticateToken, async (req, res) => {
         registrationEndDate,
         playerBasePrice,
         bidAmountPerTeam,
-        auctionStartDate
+        auctionStartDate,
+        breakPoints,
+        increments
     } = req.body;
 
     // Check for missing fields
@@ -165,9 +173,11 @@ router.post("/update", authenticateToken, async (req, res) => {
         !leagueEndDate ||
         !registrationFee ||
         !registrationEndDate ||
-        !playerBasePrice||
-        !bidAmountPerTeam||
-        !auctionStartDate
+        !playerBasePrice ||
+        !bidAmountPerTeam ||
+        !auctionStartDate ||
+        !breakPoints ||
+        !increments
     ) {
         return res.status(400).json({
             statusCode: 400,
@@ -191,7 +201,9 @@ router.post("/update", authenticateToken, async (req, res) => {
             registration_end_date = ?,
             player_base_price=?,
             bid_amount_per_team = ?,
-            auction_start_date = ?
+            auction_start_date = ?,
+            increments = ?,
+            break_points = ?
         WHERE league_id = ?
     `;
 
@@ -209,8 +221,9 @@ router.post("/update", authenticateToken, async (req, res) => {
         playerBasePrice,
         bidAmountPerTeam,
         auctionStartDate,
+        increments,
+        breakPoints,
         leagueId,
-
     ];
 
     try {

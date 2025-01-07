@@ -206,8 +206,6 @@ router.post("/sell", authenticateToken, async (req, res, next) => {
     await conn.beginTransaction();
     const balanceAmount = Number(team.balance_amount) - Number(soldAmount)
     const maxAmountPerPlayerBalance = balanceAmount - ((11 - (Number(teamPlayerCount.player_count_in_team) + 1)) * Number(playerBasePrice))
-console.log('maxAmountPerPlayerBalance',maxAmountPerPlayerBalance);
-console.log('balanceAmount',balanceAmount);
 
     const sellQuery = 'UPDATE player_details SET sold_to = ? , sold_amount = ? WHERE player_id = ?'
     const sellParams = [soldTo, soldAmount, playerId]
