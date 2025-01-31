@@ -88,7 +88,8 @@ router.post("/add", authenticateToken, async (req, res) => {
         !bidAmountPerTeam ||
         !auctionStartDate ||
         !breakPoints ||
-        !increments
+        !increments||
+        !minimumPlayerCount
     ) {
         return res.status(400).json({
             statusCode: 400,
@@ -102,8 +103,8 @@ router.post("/add", authenticateToken, async (req, res) => {
         INSERT IGNORE INTO leagues (
             league_name, league_full_name, league_locations, total_players, total_teams,
             has_unsold, league_start_date, league_end_date, registration_fee, created_by,
-            registration_end_date,player_base_price,bid_amount_per_team,auction_start_date,break_points,increments
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ? , ? , ? ,? ,?)
+            registration_end_date,player_base_price,bid_amount_per_team,auction_start_date,break_points,increments,minimum_player_count
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ? , ? , ? ,? ,?,?)
     `;
 
     const values = [
@@ -122,7 +123,8 @@ router.post("/add", authenticateToken, async (req, res) => {
         bidAmountPerTeam,
         auctionStartDate,
         breakPoints,
-        increments
+        increments,
+        minimumPlayerCount
     ];
 
     try {
@@ -158,7 +160,8 @@ router.post("/update", authenticateToken, async (req, res) => {
         bidAmountPerTeam,
         auctionStartDate,
         breakPoints,
-        increments
+        increments,
+        minimumPlayerCount
     } = req.body;
 
     // Check for missing fields
@@ -177,7 +180,8 @@ router.post("/update", authenticateToken, async (req, res) => {
         !bidAmountPerTeam ||
         !auctionStartDate ||
         !breakPoints ||
-        !increments
+        !increments||
+        !minimumPlayerCount
     ) {
         return res.status(400).json({
             statusCode: 400,
@@ -203,7 +207,8 @@ router.post("/update", authenticateToken, async (req, res) => {
             bid_amount_per_team = ?,
             auction_start_date = ?,
             increments = ?,
-            break_points = ?
+            break_points = ?,
+            minimum_player_count = ?
         WHERE league_id = ?
     `;
 
@@ -223,6 +228,7 @@ router.post("/update", authenticateToken, async (req, res) => {
         auctionStartDate,
         increments,
         breakPoints,
+        minimumPlayerCount,
         leagueId,
     ];
 

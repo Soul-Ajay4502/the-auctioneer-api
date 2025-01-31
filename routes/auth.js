@@ -10,6 +10,7 @@ let refreshTokens = [];
 const { validationResult } = require("express-validator");
 const validator = require("./validations/validation");
 const { generateOTP, verifyOTP, encryptPassword } = require("../commonFunctions/authFunctions");
+const { sendMail } = require("../commonFunctions/sendEmail");
 
 router.get("/", async (req, res, next) => {
     const conn = await db.connection();
@@ -208,6 +209,25 @@ router.post("/logout", (req, res) => {
 router.post("/get-otp-for-signUp", async (req, res) => {
     const { email, password, displayName } = req.body;
     const query = `SELECT * FROM user_login WHERE user_name = ? `;
+    const sendOtpForSignUp = async (otp) => {
+        await sendMail({
+            to: email,
+            subject: "OTP FOR REGISTRAION - AUCTIONEER",
+            text: `Your One-Time Password (OTP) is: ${otp}. Please use this to complete your verification process.`,
+            html: `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;">
+                    <h2 style="text-align: center; color: #555;">Your OTP for Secure Access</h2>
+                    <p>Hello,</p>
+                    <p>We have received a request to access your account. Please use the One-Time Password (OTP) below to complete your verification process:</p>
+                    <div style="margin: 20px auto; padding: 10px; text-align: center; font-size: 18px; font-weight: bold; color:rgb(0, 0, 0); background-color: #f9f9f9; border: 1px solid #ddd; display: inline-block;">
+                    ${otp}
+                    </div>
+                    <p>This OTP is valid for the next 10 minutes. Please do not share it with anyone.</p>
+                    <p>If you did not request this OTP, please contact us immediately to secure your account.</p>
+                    <p style="margin-top: 20px;">Best regards,</p>
+                    <p style="font-weight: bold;">The Security Team</p>
+                </div>`
+        });
+    }
     const userRecords = [email];
     try {
         [userRows, userFields] = await db.query(query, userRecords);
@@ -222,6 +242,7 @@ router.post("/get-otp-for-signUp", async (req, res) => {
              VALUES(?,?,?,?,?,?)`
             const records = [email, hashedPassword, new Date(), displayName, otp, expiresAt]
             const [response] = await db.query(createUserQuery, records);
+            await sendOtpForSignUp(otp);
             return res.status(200).json({
                 statusCode: 200,
                 isError: false,
@@ -243,8 +264,8 @@ router.post("/get-otp-for-signUp", async (req, res) => {
         SET user_password = ? ,display_name = ?,otp = ? ,otp_expires_at = ? WHERE user_name = ?`
         const records = [hashedPassword, displayName, otp, expiresAt, email]
         const [response] = await db.query(createUserQuery, records);
-
-        res.status(200).json({
+        await sendOtpForSignUp(otp);
+        return res.status(200).json({
             statusCode: 200,
             isError: false,
             otp: otp,
@@ -284,10 +305,29 @@ router.post("/get-otp-for-resetPassword", async (req, res) => {
             return res.status(400).json({
                 statusCode: 400,
                 isError: false,
-                otp: otp,
                 statusText: "Your Onboarding has not completed please register first",
             });
         }
+
+        await sendMail({
+            to: email,
+            subject: "OTP FOR PASSWORD RESET - AUCTIONEER",
+            text: `Your One-Time Password (OTP) is: ${otp}. Please use this to reset your password.`,
+            html: `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;">
+                    <h2 style="text-align: center; color: #555;">Your OTP for reset password</h2>
+                    <p>Hello,</p>
+                    <p>We have received a request to access your account. Please use the One-Time Password (OTP) below to complete your password reset process:</p>
+                    <div style="display:flex; justify-content:center">
+                    <div style="margin: 20px auto; padding: 10px; text-align: center; font-size: 18px; font-weight: bold; color: #0056b3; background-color: #f9f9f9; border: 1px solid #ddd; display: inline-block;">
+                        ${otp}
+                    </div>
+                    </div>
+                    <p>This OTP is valid for the next 5 minutes. Please do not share it with anyone.</p>
+                    <p>If you did not request this OTP, please contact us immediately to secure your account.</p>
+                    <p style="margin-top: 20px;">Best regards,</p>
+                    <p style="font-weight: bold;">The Auctioneer Security Team</p>
+                </div>`
+        });
 
         const createUserQuery = `UPDATE user_login 
         SET otp = ? ,otp_expires_at = ? WHERE user_name = ?`
@@ -314,7 +354,7 @@ router.post("/get-otp-for-resetPassword", async (req, res) => {
 });
 
 router.post("/resetPassword", async (req, res) => {
-    const { email, otp, newPassword:password } = req.body;
+    const { email, otp, newPassword: password } = req.body;
     const query = `SELECT * FROM user_login WHERE user_name = ? `;
     const userRecords = [email];
     try {

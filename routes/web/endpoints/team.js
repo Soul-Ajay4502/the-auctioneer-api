@@ -19,16 +19,16 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: async (req, file) => {
-      // Assuming the folder name is sent in the request body or query
-      const folderName =  req.query.leagueId+'-'+req.query.folderName || "default_folder";
-      return {
-        folder: `${folderName}/team_logo`, // Dynamic folder name
-        allowed_formats: ["jpeg", "png", "jpg", "gif"], // Allowed formats
-        public_id: `file_${Date.now()}`, // Optional: Add a custom public ID
-      };
+        // Assuming the folder name is sent in the request body or query
+        const folderName = req.query.leagueId + '-' + req.query.folderName || "default_folder";
+        return {
+            folder: `${folderName}/team_logo`, // Dynamic folder name
+            allowed_formats: ["jpeg", "png", "jpg", "gif"], // Allowed formats
+            public_id: `file_${Date.now()}`, // Optional: Add a custom public ID
+        };
     },
-  });
-  
+});
+
 
 const upload = multer({ storage });
 
@@ -72,7 +72,8 @@ router.post("/add", authenticateToken, upload.single("teamLogo"), async (req, re
         leagueId,
         jerseyColor,
         maxAmountForBid,
-        playerBasePrice
+        playerBasePrice,
+        minimumPlayerCount
     } = req.query;
 
     // Validate input fields
@@ -94,7 +95,7 @@ router.post("/add", authenticateToken, upload.single("teamLogo"), async (req, re
             logo_url,max_amount_for_bid,balance_amount,max_amount_per_player
         ) VALUES (?, ?, ?, ?, ?, ? , ? , ? , ? , ?)
     `;
-    const MAX_AMOUNT_PER_PLAYER = Number(maxAmountForBid) - (Number(playerBasePrice) * 10)
+    const MAX_AMOUNT_PER_PLAYER = Number(maxAmountForBid) - (Number(playerBasePrice) * (Number(minimumPlayerCount) - 1))
     const values = [
         teamName,
         teamOwner || null, // Optional field
@@ -126,7 +127,7 @@ router.post(
     "/update",
     authenticateToken,
     async (req, res) => {
-        const { teamName, teamOwner, teamOwnerPhone, jerseyColor, teamId,maxAmountForBid,
+        const { teamName, teamOwner, teamOwnerPhone, jerseyColor, teamId, maxAmountForBid,minimumPlayerCount,
             playerBasePrice } = req.query;
 
         // Validate input fields (team name is mandatory)
@@ -151,7 +152,7 @@ router.post(
                 max_amount_per_player = ?
             WHERE team_id = ?
         `;
-        const MAX_AMOUNT_PER_PLAYER = Number(maxAmountForBid) - (Number(playerBasePrice) * 10)
+        const MAX_AMOUNT_PER_PLAYER = Number(maxAmountForBid) - (Number(playerBasePrice) * (Number(minimumPlayerCount) - 1))
 
         const values = [
             teamName,
@@ -255,7 +256,7 @@ router.get("/listWithPlayerCount/:leagueId", authenticateToken, async (req, res,
     const params = [leagueId];
 
     try {
-        const [results] = await db.query(teamListQuery,params)
+        const [results] = await db.query(teamListQuery, params)
         const formattedResponseData = toCamelCase(results);
         // Sending a structured response
         res.status(200).json({

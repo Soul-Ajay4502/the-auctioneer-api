@@ -260,4 +260,24 @@ router.post("/unsold", authenticateToken, async (req, res, next) => {
     }
 });
 
+router.get("/playerCount/:leagueId", authenticateToken, async (req, res, next) => {
+    const leagueId = req.params.leagueId;
+    // Query to fetch leagues created by the logged-in user
+    const leaguePlayeListQuery = `SELECT COUNT(*) AS registered_player_count FROM player_details WHERE league_id = ? `;
+    const params = [leagueId];
+
+    try {
+        const [rows] = await db.query(leaguePlayeListQuery, params)
+        const formattedResponseData = toCamelCase(rows);;
+        // Sending a structured response
+        res.status(200).json({
+            statusCode: 200,
+            isError: false,
+            responseData: formattedResponseData,
+            statusText: "Items retrieved successfully",
+        });
+    } catch (error) {
+        return sendServerError(res, error); // Forwarding error to a helper function
+    }
+});
 module.exports = router;
