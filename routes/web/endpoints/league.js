@@ -70,7 +70,8 @@ router.post("/add", authenticateToken, async (req, res) => {
         auctionStartDate,
         bidAmountPerTeam,
         increments,
-        breakPoints
+        breakPoints,
+        minimumPlayerCount
     } = req.body;
 
     if (
